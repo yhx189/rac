@@ -28,14 +28,13 @@
     [num (n) '()]
     [add (lhs rhs) (give-order (append (free-ids lhs) (free-ids rhs)))]
     [sub (lhs rhs) (give-order (append (free-ids lhs) (free-ids rhs)))]
-    [with (name named-expr body) (cond
-                                   [(member name (free-ids body)) 
+    [with (name named-expr body) (if (member name (free-ids body)) 
                                     (give-order (append 
-                                          (remove name (free-ids body))
-                                          (free-ids named-expr)))]
-                                   [else (give-order (append 
+                                          (remove name (remove-duplicates (free-ids body)))
+                                          (free-ids named-expr)))
+                                    (give-order (append 
                                           (free-ids body)
-                                          (free-ids named-expr))) ]
+                                          (free-ids named-expr))) 
                                        )]
     [id (name) (list name)]))
 
@@ -61,15 +60,14 @@
     [num (n) '()]
     [add (lhs rhs) (give-order (append (bound-ids lhs) (bound-ids rhs)))]
     [sub (lhs rhs) (give-order (append (bound-ids lhs) (bound-ids rhs)))]
-    [with (name named-expr body) (cond
-                                   [(member name (free-ids body)) 
+    [with (name named-expr body) (if (member name (free-ids body)) 
                                     (give-order (append 
                                           (list name)
                                           (bound-ids named-expr)
-                                          (bound-ids body)))]
-                                   [else (give-order ( append
+                                          (bound-ids body)))
+                                    (give-order ( append
                                                        (bound-ids named-expr)
-                                                       (bound-ids body))) ]
+                                                       (bound-ids body))) 
                                        )]
     [id (name) '()]))
 
@@ -81,11 +79,16 @@
     [sub (lhs rhs) (or (shadowed-variable? lhs) (shadowed-variable? rhs)) ]
     [with (name named-expr body) (cond
                                    [(member name (bound-ids body)) #t]
-                                   [else #f])]
+                                   [else (or
+                                          (shadowed-variable? named-expr)
+                                          (shadowed-variable? body))])]
     [id (name) #f]))
 
 (print-only-errors)
 ; test cases start from simple ones
+(test (shadowed-variable?
+  (with 'x (with 'y (num 1) (with 'y (num 2) (id 'y))) (num 3)))
+      #t)
 (test (free-ids  (id 'x))
      (list 'x))
 (test (binding-ids  (id 'x))

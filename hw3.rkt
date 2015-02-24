@@ -50,7 +50,7 @@
   (-> symbol? (listof FunDef?) FunDef?)
   (cond
    [(empty? fundefs)
-    (error 'interp "undefined function")]
+    (error 'interp "undefined function ~s" name)]
    [else
     (if (symbol=? name (fundef-fun-name
                         (first fundefs)))
@@ -59,7 +59,8 @@
 
 
 
-
+(define (not-include pos lst)
+  (remove* (list (list-ref lst pos)) lst))
 
 (define/contract (subst a-wae sub-ids vals)
   (-> FnWAE?  (listof symbol?)  (listof number?) FnWAE?)
@@ -72,9 +73,12 @@
     [with (bound-id named-expr body-expr)
           (with bound-id
                 (subst named-expr sub-ids vals)
-                (if (symbol=? bound-id (first sub-ids))
-                    body-expr
-                    (subst body-expr sub-ids vals)))]
+                (if (equal? #f (member bound-id sub-ids));(symbol=? bound-id (first sub-ids))
+                    (subst body-expr sub-ids vals)
+                    (subst body-expr
+                           (remove* (list bound-id) sub-ids ) 
+                           (not-include (- (length sub-ids) (length (member bound-id sub-ids))) vals))
+                    ))]
     [id (name) (if (member name  sub-ids) 
                    (num (list-ref vals 
                                   (- (length sub-ids) (length (member name sub-ids)))))
@@ -97,33 +101,28 @@
     [sub (l r) ( - (interp l fundefs)
                    (interp r fundefs))]
     [with (name named-expr body) (interp 
-                                  (subst body (list name) (list (interp named-expr fundefs)))
+                                  (subst body (list name) 
+                                         
+                                         (list (interp named-expr fundefs)))
                                   fundefs)] 
-    [id (name) (error 'interp "free ") ]
+    [id (name) (error 'interp "free ~s" name) ]
     [app (name args)
          (local [(define a-fundef
                    (lookup-fundef name fundefs))]
+           
            (if (= (length args) (length (deffun-arg-names a-fundef)))
                (cond 
-                 [(empty? args) (interp (fundef-body a-fundef) '())]
-                 [else   
+                 [(empty? args) (interp (fundef-body a-fundef) fundefs)]
+                 [else
+                  
                   (interp
                      ( subst (fundef-body a-fundef)
                              (fundef-arg-names a-fundef)
-                             (map (lambda (x) (interp x fundefs)) args))              
+                             (map (lambda (xx) (interp xx fundefs)) args))              
                      fundefs )])
                (error 'interp "wrong arity")))]))
 
-(define (check-pieces expression size what)
-  (unless (and (list? expression)
-               (= (length expression) size))
-    (parse-error what expression)))
 
-(define (parse-error what expression)
-  (error 'parser
-         "expected: ~a, found:\n~a"
-         what
-         (pretty-format expression 30)))
 
 (define (parse sexps)
   ;(-> any/c  FnWAE?)
@@ -161,7 +160,16 @@
    
 (print-only-errors)
 
-  
+(test (interp (parse '{main})
+              (list (parse-defn '{deffun {main} {with {x 0} x}})))
+      0)
+
+(test (interp (parse '{main})
+              (list (parse-defn '{deffun {f x} x})
+                    (parse-defn '{deffun {main} {f 0}})
+                    ))
+      0)
+
 (test (parse-defn '{deffun {f x y} {+ x y}})
     (fundef 'f '(x y) (add (id 'x) (id 'y))))
 
@@ -272,6 +280,8 @@
 (test (interp (parse '{f 1 2 3})
               (list (parse-defn '{deffun {f x y z} {+ x {+ y z}}})))
       6)
+
+
 (test (interp (parse '(f {+ 5 5})) (list (parse-defn '{deffun {f x} {+ x x}})))
       20)
 (test (interp (parse '{f 10 13}) (list (parse-defn '{deffun {f f x} {+ f x}})))
@@ -338,7 +348,10 @@
           "bad syntax")
 (test (subst (id 'x) (list 'y) (list 5)) (id 'x))
 
-
+(test (interp
+  (parse '(f 1 2))
+  (list (parse-defn '(deffun (f x y) (with (x 4) (+ x y))))))
+      6)
 (test/exn (interp (parse '{with {x y} 1})
                   (list))
           "free")
