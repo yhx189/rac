@@ -468,46 +468,38 @@
 (test (let ([hp (make-vector 40 )])
         (with-heap hp
                    (init-allocator)
-                   (gc:alloc-flat 42) ; 8 -> DEAD
-                   (gc:alloc-flat 54) ; 10 -> DEAD
-                   (gc:alloc-flat 66) ; 12 -> DEAD
-                   (gc:cons 10 12)    ; 14 -> DEAD
-                   (gc:alloc-flat 78) ; 17 -> DEAD
-                   (gc:cons 10 12)     ; 19 -> DEAD
+                   (gc:alloc-flat 42) ; 8
+                   (gc:alloc-flat 54) ; 10 
+                   (gc:alloc-flat 66) ; 12 
+                   (gc:cons 10 12)    ; 14 
+                   (gc:alloc-flat 78) ; 17 
+                   (gc:cons 10 12)     ; 19 
                    (gc:cons 10 12)      ; 22
                    (gc:cons 10 12)     ;25
                    (gc:cons 10 12)
                    (gc:cons 10 12)
-                   (gc:alloc-flat 99) ; The guy that triggers the gc)
+                   (gc:alloc-flat 99) 
         hp))
       #(flat 10 flat #f flat 8 flat 8 
              flat 99 free free free free free free free free free free free free free free
              free free free free free free free free free free free free free free free free))
-      ;(vector 26 28 26 '() #f #t 0 1 2 3 4 5
-       ;       ; space 1
-        ;      'freed 'freed 'freed 'freed 'freed 'freed 'freed
-         ;     'freed 'freed 'freed 'freed 'freed 'freed 'freed
-              ; space 2
-          ;    'flat 99 'free 'free 'free 'free 'free
-           ;   'free 'free 'free 'free 'free 'free 'free))
-(test (let ([h (make-vector 40 #f)])
-        (with-heap h
+      
+(test (let ([hp (make-vector 40 #f)])
+        (with-heap hp
                    (init-allocator)
-                   (gc:alloc-flat 42) ; 8 -> DEAD
-                   (gc:alloc-flat 54) ; 10 -> 28
-                   (gc:alloc-flat 66) ; 12 -> 26
-                   (gc:cons 12 8)    ; 14 -> DEAD
-                   (gc:alloc-flat 78) ; 17 -> DEAD
-                   (gc:cons 10 17)    ; 19 -> DEAD
-                   (gc:cons 12 10)    ; The guy that triggers the first gc. 26 -> 8
-                   (gc:alloc-flat 78) ; 29 -> DEAD 
-                   (gc:alloc-flat 78) ; 31 -> DEAD
-                   (gc:alloc-flat 78) ; 33 -> DEAD
-                   ; this guy triggers the second gc.
-                   ; he references the cons that triggered the first gc
-                   ; and an immediate.
-                   (gc:cons 31 33 ) ; ? 
-        h))
+                   (gc:alloc-flat 42) ; 8 
+                   (gc:alloc-flat 54) ; 10 
+                   (gc:alloc-flat 66) ; 12
+                   (gc:cons 12 8)    ; 14
+                   (gc:alloc-flat 78) ; 17 
+                   (gc:cons 10 17)    ; 19
+                   (gc:cons 12 10)    
+                   (gc:alloc-flat 78) ; 29 
+                   (gc:alloc-flat 78) ; 31 
+                   (gc:alloc-flat 78) ; 33 
+                   
+                   (gc:cons 31 33 ) ; 
+        hp))
       #(flat 40 flat #t flat 28 flat 28 
              free free free free free free free free free free free free free free free free
              flat 66 flat 54 pair 12 10 flat 78 flat 78 flat 78 pair 31 33)
