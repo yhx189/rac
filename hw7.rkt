@@ -87,8 +87,8 @@
 (define (gc:cons hd tl)
   (define ptr (alloc 3 hd tl))
   (heap-set! ptr 'pair)
-  (heap-set! (+ ptr 1) hd)
-  (heap-set! (+ ptr 2) tl)
+  (heap-set! (+ ptr 1) (read-root hd))
+  (heap-set! (+ ptr 2) (read-root tl))
   (heap-set! 1 (+ 3 (heap-ref 1)))
   ptr)
 
@@ -101,7 +101,7 @@
   (heap-set! (+ next 2) free-vars-count)
   (for ([x (in-range 0 free-vars-count)]
         [r (in-list free-vars)])
-    (heap-set! (+ next 3 x) (read-root r)))
+    (heap-set! (+ next 3 x) (read-root r)))  ;; read-root r
   (heap-set! 1 (+ 3 free-vars-count (heap-ref 1)))
   next)
 
@@ -206,9 +206,10 @@
   
   (swap-heap)
  
-  (traverse/roots (get-root-set))
+  
   (traverse/roots some-roots)
   (traverse/roots some-more-roots)
+  (traverse/roots (get-root-set))
   (traverse/pointers)
 
   (free-from-space))
@@ -268,11 +269,13 @@
      
      ;; read-root ?
      (heap-set! 6 (heap-ref 7))
+     ;(move-tail (heap-ref (+ loc 1)))
      (move-tail (heap-ref (+ loc 1)))
      (heap-set! (+ 1 loc)  (heap-ref 6))
      (heap-set! 6 'flat)
      
      (heap-set! 6 (heap-ref 7))
+     ;(move-tail (heap-ref (+ loc 2)))
      (move-tail (heap-ref (+ loc 2)))
      (heap-set! (+ 2 loc)  (heap-ref 6))
      (heap-set! 6 'flat)
@@ -319,7 +322,12 @@
   (cond
     [(empty? thing) (void)]
     [(list? thing) (for-each traverse/roots thing)]
-    [(root? thing) (traverse/roots (read-root thing))]
+    [(root? thing) 
+     (heap-set! 6 (heap-ref 7))
+     (printf "traversing root ~s\n" thing)
+     (traverse/roots (read-root thing))
+     (set-root! thing (heap-ref 6))
+     (heap-set! 6 'flat)]  ;; read-root thing
                    
     [(number? thing) (move-tail thing)]))
 
@@ -328,24 +336,28 @@
   (case (heap-ref loc)
     [(pair) 
      ;(heap-ref 7)
-     (printf "moving tail ~s" (heap-ref loc))
-     (heap-set! loc 'forw)
+     (printf "moving tail on pair @ ~s\n" loc)
+     ;(heap-set! loc 'forw)
      (heap-set! (heap-ref 7) 'pair)
      (heap-set! (+ (heap-ref 7) 1) (heap-ref (+ 1 loc)))
      (heap-set! (+ (heap-ref 7) 2) (heap-ref (+ 2 loc)))
-     (heap-set! 7 (+ 3 (heap-ref 7)))]
-    
+     (heap-set! 7 (+ 3 (heap-ref 7)))
+     (printf "tail ~s\n" (heap-ref 7))]
+     
     [(flat) 
      ;(heap-ref 7)
-     (heap-set! loc 'forw)
+     (printf "moving tail on flat @ ~s\n" loc)
+     ;(heap-set! loc 'forw)
      (heap-set! (heap-ref 7) 'flat)
      (heap-set! (+ (heap-ref 7) 1) (heap-ref (+ 1 loc)))
-     (heap-set! 7 (+ 2 (heap-ref 7)))]
+     (heap-set! 7 (+ 2 (heap-ref 7)))
+     (printf "tail ~s\n" (heap-ref 7))]
     
     [(proc) 
      ;(heap-ref 7)
-     (printf "moving proc @ ~s"  loc)
-     (heap-set! loc 'forw)
+     
+     (printf "moving tail on proc @ ~s\n"  loc)
+    ; (heap-set! loc 'forw)
      (heap-set! (heap-ref 7) 'proc)
      (heap-set! (+ (heap-ref 7) 1) (heap-ref (+ 1 loc)))
      (heap-set! (+ (heap-ref 7) 2) (heap-ref (+ 2 loc)))
@@ -353,10 +365,11 @@
        (heap-set! (+ (heap-ref 7) 3 x) (heap-ref (+ loc 3 x)))
        ;(traverse/roots (heap-ref (+ loc 3 x)))
        )
-     (heap-set! 7 (+ 3 (heap-ref (+ 2 loc)) (heap-ref 7)))]
+     (heap-set! 7 (+ 3 (heap-ref (+ 2 loc)) (heap-ref 7)))
+     (printf "tail ~s\n" (heap-ref 7))]
     
     [else
-     (error 'move-tail "crash ~s" (heap-ref loc))]))
+     (error 'move-tail "crash ~s"  loc)]))
 
 
 
@@ -376,32 +389,32 @@
           (with-heap hp
                      (init-allocator)
                      (gc:alloc-flat 2)
-                     (gc:cons  5 6)
+                     (gc:cons  (simple-root 5) (simple-root 6))
                      hp)) ;; return the heap!
         #(flat 13 flat #f flat 8 flat 8 flat 2 pair 5 6 free free
                free free free free free free free free free free free free free free free free free))
 (test (let ([hp (make-vector 32)])
           (with-heap hp
                      (init-allocator)
-                     (gc:cons 5 6 )
-                     (gc:cons 7 8)
+                     (gc:cons (simple-root 5) (simple-root 6) )
+                     (gc:cons (simple-root 7 )(simple-root 8))
                      hp)) ;; return the heap!
         #(flat 14 flat #f flat 8 flat 8 pair 5 6 pair 7 8 
                free free free free free free free free free free free 
                free free free free free free free))
 
-;(test (with-heap (make-vector 100)
-;                 (init-allocator)
-;                 (define f1 (gc:alloc-flat 1))
-;                 (define r1 (make-root 'f1
-;                                       (lambda () f1)
-;                                       (lambda (v) (set! f1 v))))
-;                 (define c1 (gc:cons r1 r1))
-;                 (with-roots (c1)
-;                             (gc:deref
-;                              (gc:first
-;                               (gc:cons r1 r1)))))
-;      1)
+(test (with-heap (make-vector 100)
+                 (init-allocator)
+                 (define f1 (gc:alloc-flat 1))
+                 (define r1 (make-root 'f1
+                                       (lambda () f1)
+                                       (lambda (v) (set! f1 v))))
+                 (define c1 (gc:cons r1 r1))
+                 (with-roots (c1)
+                             (gc:deref
+                              (gc:first
+                               (gc:cons r1 r1)))))
+      1)
 
 
 (test/exn (with-heap 
@@ -456,13 +469,13 @@
 (test (with-heap 
        (make-vector 18 #f) 
        (init-allocator)
-       (gc:cons 4 5)
+       (gc:cons (simple-root 4) (simple-root 5))
        (gc:flat? 8)) #f)
 
 (test (with-heap 
        (make-vector 18 #f) 
        (init-allocator)
-       (gc:cons 4 5)
+       (gc:cons (simple-root 4) (simple-root 5))
        (gc:cons? 8)) #t)
 
 (test (let ([hp (make-vector 40 )])
@@ -471,13 +484,13 @@
                    (gc:alloc-flat 42) ; 8
                    (gc:alloc-flat 54) ; 10 
                    (gc:alloc-flat 66) ; 12 
-                   (gc:cons 10 12)    ; 14 
+                   (gc:cons (simple-root 10) (simple-root 12))    ; 14 
                    (gc:alloc-flat 78) ; 17 
-                   (gc:cons 10 12)     ; 19 
-                   (gc:cons 10 12)      ; 22
-                   (gc:cons 10 12)     ;25
-                   (gc:cons 10 12)
-                   (gc:cons 10 12)
+                   (gc:cons (simple-root 10) (simple-root 12))     ; 19 
+                   (gc:cons (simple-root 10) (simple-root 12))      ; 22
+                   (gc:cons (simple-root 10) (simple-root 12))     ;25
+                   (gc:cons (simple-root 10) (simple-root 12))
+                   (gc:cons (simple-root 10) (simple-root 12))
                    (gc:alloc-flat 99) 
         hp))
       #(flat 10 flat #f flat 8 flat 8 
@@ -490,17 +503,17 @@
                    (gc:alloc-flat 42) ; 8 
                    (gc:alloc-flat 54) ; 10 
                    (gc:alloc-flat 66) ; 12
-                   (gc:cons 12 8)    ; 14
+                   (gc:cons (simple-root 12) (simple-root 8))    ; 14
                    (gc:alloc-flat 78) ; 17 
-                   (gc:cons 10 17)    ; 19
-                   (gc:cons 12 10)    
+                   (gc:cons (simple-root 10) (simple-root 17))    ; 19
+                   (gc:cons (simple-root 12) (simple-root 10))    
                    (gc:alloc-flat 78) ; 29 
                    (gc:alloc-flat 78) ; 31 
                    (gc:alloc-flat 78) ; 33 
                    
-                   (gc:cons 31 33 ) ; 
+                   (gc:cons (simple-root 31) (simple-root 33) ) ; 
         hp))
       #(flat 40 flat #t flat 28 flat 28 
-             free free free free free free free free free free free free free free free free
-             flat 66 flat 54 pair 12 10 flat 78 flat 78 flat 78 pair 31 33)
+             free free free free free free free free free free free free free free free free 
+             flat 66 flat 54 pair 24 26 flat 78 flat 78 flat 78 pair 31 33)
       )
